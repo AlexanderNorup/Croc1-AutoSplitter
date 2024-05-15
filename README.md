@@ -14,6 +14,12 @@ It is currently in "Beta" (might be forever, who knows).
 
 The auto-reset and load-time remover can be disabled through config.
 
+Please note that this (as of writing) only as support for splitting individual levels! 
+
+Demo:
+
+https://github.com/AlexanderNorup/Croc1-AutoSplitter/assets/5619812/2d1dd0f4-b694-46a2-8d5a-a25ed9e62205
+
 ## Installing the autosplitter
 1. Download the [`croc1_emulator.asl`](croc1_emulator.asl) file from this repository.
 2. Open LiveSplit
