@@ -16,6 +16,8 @@ The auto-reset and load-time remover can be disabled through config.
 
 Please note that this (as of writing) only as support for splitting individual levels! 
 
+**FOR BEST EXPERIENCE**: Start LiveSplit AFTER your emulator is running. While it should™ technically find and attach dynamically, it works best if the autosplitter is started after the game. Especially for Bishawk and detecting which core to use. For Duckstation it should be fine if you start it afterwards. Restaring your emulator once attached should also be fine. But if you find it is not working, restarting LiveSplit is your best bet.
+
 Demo:
 
 https://github.com/AlexanderNorup/Croc1-AutoSplitter/assets/5619812/2d1dd0f4-b694-46a2-8d5a-a25ed9e62205
@@ -37,6 +39,7 @@ Since the leaderboards for Croc 1 only use RTA (Real Time Attack) you should sti
 **Tested to work**:
 - ePSXe 1.9.0
 - duckstation-qt-x64
+- EmuHawk (BizHawk) (2.9.1) : Both otcoshock and nymashock cores
 
 **Should would™**:
 - ePSXe 1.9.25
@@ -46,7 +49,6 @@ Since the leaderboards for Croc 1 only use RTA (Real Time Attack) you should sti
 - EmuHawk (BizHawk) (2.6.1, 2.6.2 & 2.6.3)
 
 ## Known issues:
-- Duckstation emulator detection is **sometimes** broken. Restarting the game in duckstation sometimes fixes the issue. Sometimes you have to restart the game multiple times for the autosplitter to find it.
 - The autosplitter sometimes is unable to attach to ePSXe. Starting LiveSplit as administrator should fix the issue. 
 
 You can view logs using [Sysinternals DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview).
