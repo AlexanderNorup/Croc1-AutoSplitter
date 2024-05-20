@@ -55,6 +55,7 @@ startup {
     vars.hasBeenOneFrameOnMenuWithoutButtons = false;
     // Debounce on splits
     vars.splitOnLevelComplete = false;
+    vars.splitOnJigsawLevel = false;
 }
 
 init {
@@ -187,7 +188,7 @@ init {
 
             return IntPtr.Zero;
         };
-        
+
         vars.dynamicFinder = duckstationDynamicFinder; 
         vars.dynamicAddressSearch = true;
         version = "any";
@@ -242,6 +243,7 @@ update {
     // States
     vars.levelCompleteShown = vars.baseRAMAddress + 0x074acc;
     vars.levelCompleteConfirmed = vars.baseRAMAddress + 0x074e70;
+    vars.collectedJigsawInThisLevel = vars.baseRAMAddress + 0x0862b2;
     vars.menuState = vars.baseRAMAddress + 0x0748ec;
     vars.menuSelectedIndex = vars.baseRAMAddress + 0x0751dc;
     vars.controllerState = vars.baseRAMAddress + 0x07bf42;
@@ -255,6 +257,7 @@ update {
     // Read memory
     current.levelCompleteShown = memory.ReadValue<uint>((IntPtr)vars.levelCompleteShown);
     current.levelCompleteConfirmed = memory.ReadValue<uint>((IntPtr)vars.levelCompleteConfirmed);
+    current.collectedJigsawInThisLevel = memory.ReadValue<uint>((IntPtr)vars.collectedJigsawInThisLevel);
     current.menuState = memory.ReadValue<uint>((IntPtr)vars.menuState);
     current.menuSelectedIndex = memory.ReadValue<uint>((IntPtr)vars.menuSelectedIndex);
     current.controllerState = memory.ReadValue<uint>((IntPtr)vars.controllerState);
@@ -298,15 +301,31 @@ reset {
 
 split {
    
+    // Clear debounces
     if(current.levelCompleteShown == 0){
         vars.splitOnLevelComplete = false;
-        return false;
     }
+
+    if(current.collectedJigsawInThisLevel == 0){
+        vars.splitOnJigsawLevel = false;
+    }
+
+    // Check if completed level
    
     if(!vars.splitOnLevelComplete
         && current.levelCompleteShown == 1 
-        && current.levelCompleteConfirmed == 1){
+        && current.levelCompleteConfirmed == 1
+        && current.collectedJigsawInThisLevel != 1)
+    {
         vars.splitOnLevelComplete = true;
+        return true;
+    }
+
+    // Check if collected jigsaw
+    if(!vars.splitOnJigsawLevel
+        && current.collectedJigsawInThisLevel == 1)
+    {
+        vars.splitOnJigsawLevel = true;
         return true;
     }
  

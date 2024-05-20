@@ -8,9 +8,10 @@ It is currently in "Beta" (might be forever, who knows).
 
 ## Features
 1. Auto-splitting on level complete (when x-pressed)
-2. Load-time removal (maybe a bit pointless for emulator runs)
-3. Auto-reset on return to the title-screen
-4. Auto-start on "Start Game" on the title-screen.
+2. Auto-splitting on jigsaw pickup (completing the special levels)
+3. Load-time removal (maybe a bit pointless for emulator runs)
+4. Auto-reset on return to the title-screen
+5. Auto-start on "Start Game" on the title-screen.
 
 The auto-reset and load-time remover can be disabled through config.
 
