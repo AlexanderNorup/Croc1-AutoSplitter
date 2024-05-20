@@ -61,7 +61,6 @@ init {
     refreshRate = 60;
 
     var mainModule = modules.First();
-    print(mainModule.ModuleMemorySize.ToString());
     switch (mainModule.ModuleMemorySize) {
         // Bizhawk
         case 0x456000: 
@@ -172,9 +171,23 @@ init {
     // Unfortunately, duckstation doesn't have a static base RAM address,
     // so we'll have to keep track of it in the update block.
     if (vars.duckstationProcessNames.Contains(game.ProcessName)) {
-        Func<IEnumerable<MemoryBasicInformation>, IntPtr> duckstationDynamicFinder = (memoryPages) => 
-            memoryPages.Where(p => p.Type == MemPageType.MEM_MAPPED && p.RegionSize == (UIntPtr)0x200000).FirstOrDefault().BaseAddress;
+        Func<IEnumerable<MemoryBasicInformation>, IntPtr> duckstationDynamicFinder = (memoryPages) => {
+            var normalMemoryBlock = memoryPages.Where(p => p.Type == MemPageType.MEM_MAPPED && p.RegionSize == (UIntPtr)0x200000).FirstOrDefault().BaseAddress;
 
+            if(normalMemoryBlock != IntPtr.Zero){
+                print("Found Duckstation at: " + normalMemoryBlock + " (Normal block value)");
+                return normalMemoryBlock;
+            }
+
+            var internalBlock = memoryPages.Where(p => p.Type == MemPageType.MEM_MAPPED && p.RegionSize == (UIntPtr)0x796000).FirstOrDefault().BaseAddress;
+            if(internalBlock != IntPtr.Zero){
+                print("Found Duckstation at: " + internalBlock + " (Internal block value)");
+                return internalBlock - 0x6a000;
+            }
+
+            return IntPtr.Zero;
+        };
+        
         vars.dynamicFinder = duckstationDynamicFinder; 
         vars.dynamicAddressSearch = true;
         version = "any";
@@ -196,7 +209,6 @@ update {
             if (!vars.dynamicStopwatch.IsRunning || vars.dynamicStopwatch.ElapsedMilliseconds > vars.ADDRESS_SEARCH_INTERVAL) {
                 vars.dynamicStopwatch.Start();
 
-                //vars.baseRAMAddress = game.MemoryPages(true);
                 vars.baseRAMAddress = vars.dynamicFinder(game.MemoryPages(true));
                 if (vars.baseRAMAddress == IntPtr.Zero) {
                     vars.dynamicStopwatch.Restart();
@@ -253,8 +265,8 @@ update {
     // Set controller buttons
     current.startPressed = (current.controllerState & vars.startPressed) == 0;
     current.xPressed = (current.controllerState & vars.xPressed) == 0;
-
-    print("MenuState read as: " + current.menuState);
+    // Debug logging 
+    //print("MenuState read as: " + current.menuState);
 }
  
 start {
