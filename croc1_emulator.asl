@@ -7,6 +7,8 @@
 state ("EmuHawk", "2.6.1") { }
 state ("EmuHawk", "2.6.2") { }
 state ("EmuHawk", "2.6.3") { }
+state ("EmuHawk", "2.9.1-octo") { }
+state ("EmuHawk", "2.9.1-nyma") { }
 state ("mednafen", "1.24.1 32bit") { }
 state ("mednafen", "1.24.1 64bit") { }
 state ("mednafen", "1.24.2 32bit") { }
@@ -28,29 +30,21 @@ state ("duckstation-nogui-x64-ReleaseLTCG", "any") { }
 
 startup {
     settings.Add("loadPause", true, "Pause loadless timer when loading levels (does not apply to Real Time)");
-    // settings.Add("dragonPause", true, "Pause loadless timer during dragon loads (does not apply to Real Time)");
     settings.Add("titleReset", true, "Reset timer when returning to title screen");
-    // settings.Add("balloonSplit", true, "Split when traveling between homeworlds");
-    // settings.Add("levelSplit", true, "Split when traveling within a homeworld (i.e. returning home and specific level entries defined below)");
-    // settings.Add("gnexusSplit", false, "(Any%) Do not split when returning from Gnorc Cove and Twilight Harbor, split upon entering Gnasty Gnorc");
-    // settings.Add("gnastySplit", true, "(Any%) Split on final hit on Gnasty Gnorc");
-    // settings.Add("lootSplit", false, "(120%) Split when entering Gnasty's Loot");
-    // settings.Add("tucoSplit", false, "(Vortex) Split when Tuco warps you to another world that he suggests to go to");
-    // settings.Add("vortexSplit", false, "(Vortex) Do not split when returning from Dry Canyon or Cliff Town, split upon entering Dr. Shemp");
-    // settings.Add("dragonSplit", false, "(80 Dragons) Split when the freed dragon count reaches 80");
-    // settings.Add("eggSplit", false, "(All Eggs) Split when 12th egg is collected"); //debated split time, this should do though
-    // settings.Add("pinkSplit", false, "(Pink Gem%) Split on final Pink Gem collected by Gnasty Gnorc");
-    // settings.Add("balloonStart", false, "(Homeworld Practice) Start timer when travelling between homeworlds");
 
     // Duckstation Vars
     vars.duckstationProcessNames = new List<string> {
         "duckstation-qt-x64-ReleaseLTCG",
         "duckstation-nogui-x64-ReleaseLTCG",
     };
-    vars.duckstation = false;
-    vars.duckstationBaseRAMAddressFound  = false;
-    vars.duckstationStopwatch = new Stopwatch();
-    vars.DUCKSTATION_ADDRESS_SEARCH_INTERVAL = 1000;
+
+    Func<IEnumerable<MemoryBasicInformation>, IntPtr> defaultDynamicFinder = (memoryPages) => IntPtr.Zero;
+
+    vars.dynamicFinder = defaultDynamicFinder;
+    vars.dynamicAddressSearch  = false;
+    vars.dynamicBaseRAMAddressFound  = false;
+    vars.dynamicStopwatch = new Stopwatch();
+    vars.ADDRESS_SEARCH_INTERVAL = 1000;
 
     vars.baseRAMAddress = IntPtr.Zero;
     
@@ -67,19 +61,49 @@ init {
     refreshRate = 60;
 
     var mainModule = modules.First();
+    print(mainModule.ModuleMemorySize.ToString());
     switch (mainModule.ModuleMemorySize) {
         // Bizhawk
-        case 0x456000:
+        case 0x456000: 
             version = "2.6.1";
             vars.baseRAMAddress = modules.Where(x => x.ModuleName == "octoshock.dll").First().BaseAddress + 0x310f80;
             break;
             case 0x454000:
-            version = "2.6.2";
+            version = "2.6.2"; 
             vars.baseRAMAddress = modules.Where(x => x.ModuleName == "octoshock.dll").First().BaseAddress + 0x30df80;
             break;
             case 0x45a000:
             version = "2.6.3";
             vars.baseRAMAddress = modules.Where(x => x.ModuleName == "octoshock.dll").First().BaseAddress + 0x30df80;
+            break;
+            case 0x482000:
+            
+            // Assuming they are running nymashock to start with
+            version = "2.9.1-nyma"; 
+            Func<IEnumerable<MemoryBasicInformation>, IntPtr> nymashock = (memoryPages) => {
+
+                var baseEmulatorPage = memoryPages.Where(p => p.Type == MemPageType.MEM_MAPPED && p.RegionSize == (UIntPtr)0x1f2000).FirstOrDefault().BaseAddress;
+                if(baseEmulatorPage != IntPtr.Zero){
+                    print("Found nymashock at: " + baseEmulatorPage );
+                    return baseEmulatorPage - 0xfd58;
+                }
+                
+                // Could not find it. Maybe they're actually using octoshock?
+                var otcoshock = modules.Where(x => x.ModuleName == "octoshock.dll").FirstOrDefault();
+                if(otcoshock != null)
+                {
+                    version = "2.9.1-octo"; 
+                    vars.dynamicAddressSearch = false;
+                    print("Found otcoshock at: " + otcoshock.BaseAddress );
+                    return otcoshock.BaseAddress + 0x124b30; 
+                }
+
+                return IntPtr.Zero;
+            };
+
+            vars.dynamicFinder = nymashock; 
+            vars.dynamicAddressSearch = true;
+            vars.baseRAMAddress = IntPtr.Zero;
             break;
         // Mednafen
         case 0x42c9000:
@@ -148,7 +172,11 @@ init {
     // Unfortunately, duckstation doesn't have a static base RAM address,
     // so we'll have to keep track of it in the update block.
     if (vars.duckstationProcessNames.Contains(game.ProcessName)) {
-        vars.duckstation = true;
+        Func<IEnumerable<MemoryBasicInformation>, IntPtr> duckstationDynamicFinder = (memoryPages) => 
+            memoryPages.Where(p => p.Type == MemPageType.MEM_MAPPED && p.RegionSize == (UIntPtr)0x200000).FirstOrDefault().BaseAddress;
+
+        vars.dynamicFinder = duckstationDynamicFinder; 
+        vars.dynamicAddressSearch = true;
         version = "any";
         vars.baseRAMAddress = IntPtr.Zero;
     }
@@ -160,24 +188,25 @@ update {
         return false;
     }
 
-    if (vars.duckstation) {
-        // Find base RAM address in Duckstation by searching its memory pages.
+    if (vars.dynamicAddressSearch) {
+        // Find base RAM address by searching it memory pages.
         // Do this periodically (using stopwatch to determine when to search again) 
         // instead of every update to reduce unnecessary computation.
-        if (!vars.duckstationBaseRAMAddressFound) {
-            if (!vars.duckstationStopwatch.IsRunning || vars.duckstationStopwatch.ElapsedMilliseconds > vars.DUCKSTATION_ADDRESS_SEARCH_INTERVAL) {
-                vars.duckstationStopwatch.Start();
-                
-                vars.baseRAMAddress = game.MemoryPages(true).Where(p => p.Type == MemPageType.MEM_MAPPED && p.RegionSize == (UIntPtr)0x200000).FirstOrDefault().BaseAddress;
+        if (!vars.dynamicBaseRAMAddressFound) {
+            if (!vars.dynamicStopwatch.IsRunning || vars.dynamicStopwatch.ElapsedMilliseconds > vars.ADDRESS_SEARCH_INTERVAL) {
+                vars.dynamicStopwatch.Start();
+
+                //vars.baseRAMAddress = game.MemoryPages(true);
+                vars.baseRAMAddress = vars.dynamicFinder(game.MemoryPages(true));
                 if (vars.baseRAMAddress == IntPtr.Zero) {
-                    vars.duckstationStopwatch.Restart();
-                    print("Failed to find DuckStations's baseRAMAddress :(");
+                    vars.dynamicStopwatch.Restart();
+                    print("Failed to find dynamic baseRAMAddress :(");
                     return false;
                 }
                 else {
-                    print("Succesfully found DuckStation's baseRAMAddress");
-                    vars.duckstationStopwatch.Reset();
-                    vars.duckstationBaseRAMAddressFound = true;
+                    print("Succesfully found dynamic baseRAMAddress");
+                    vars.dynamicStopwatch.Reset();
+                    vars.dynamicBaseRAMAddressFound = true;
                 }
             }
             else {
@@ -189,18 +218,14 @@ update {
         IntPtr temp1 = vars.baseRAMAddress;
         IntPtr temp2 = IntPtr.Zero;
         if (!game.ReadPointer(temp1, out temp2)) {
-            vars.duckstationBaseRAMAddressFound = false;
+            vars.dynamicBaseRAMAddressFound = false;
             vars.baseRAMAddress = IntPtr.Zero;
             
-            print("DuckStation's baseRAMAddress is no longer valid..");
+            print("Dynamically found baseRAMAddress is no longer valid..");
             return false;
         }
     }
 
-    // Address assignment has been moved to update block to support Duckstation's
-    // changing base RAM address. The performance impact of this should
-    // be negligible for non-Duckstation users, 
-    // and it reduces code complexity to have it once here.
     
     // States
     vars.levelCompleteShown = vars.baseRAMAddress + 0x074acc;
@@ -228,6 +253,8 @@ update {
     // Set controller buttons
     current.startPressed = (current.controllerState & vars.startPressed) == 0;
     current.xPressed = (current.controllerState & vars.xPressed) == 0;
+
+    print("MenuState read as: " + current.menuState);
 }
  
 start {
