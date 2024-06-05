@@ -56,6 +56,8 @@ startup {
     // Debounce on splits
     vars.splitOnLevelComplete = false;
     vars.splitOnJigsawLevel = false;
+
+    vars.jigsawLevelCompletedAddresses = new IntPtr[8];
 }
 
 init {
@@ -243,21 +245,33 @@ update {
     // States
     vars.levelCompleteShown = vars.baseRAMAddress + 0x074acc;
     vars.levelCompleteConfirmed = vars.baseRAMAddress + 0x074e70;
-    vars.collectedJigsawInThisLevel = vars.baseRAMAddress + 0x0862b2;
+    vars.nextLevelIsUnlocked = vars.baseRAMAddress + 0x0862b2;
     vars.menuState = vars.baseRAMAddress + 0x0748ec;
     vars.menuSelectedIndex = vars.baseRAMAddress + 0x0751dc;
     vars.controllerState = vars.baseRAMAddress + 0x07bf42;
+
+    vars.jigsawCollectedLevelBase = vars.baseRAMAddress + 0x07C3A8;
+
+    for(int i = 0; i < vars.jigsawLevelCompletedAddresses.Length; i++){
+        vars.jigsawLevelCompletedAddresses[i] = vars.jigsawCollectedLevelBase + (i * sizeof(uint));
+    }
 
     // Counters
     vars.framesSinceBoot = vars.baseRAMAddress + 0x073ac0;
     // framesSinceBootWithoutLoading is a bad name, because it does count the frames, the value just isn't updated when loading.
     // So you can check the loading state by checking if framesSinceBoot != framesSinceBootWithoutLoading
     vars.framesSinceBootWithoutLoading = vars.baseRAMAddress + 0x0729a8;
-
+    
     // Read memory
     current.levelCompleteShown = memory.ReadValue<uint>((IntPtr)vars.levelCompleteShown);
     current.levelCompleteConfirmed = memory.ReadValue<uint>((IntPtr)vars.levelCompleteConfirmed);
-    current.collectedJigsawInThisLevel = memory.ReadValue<uint>((IntPtr)vars.collectedJigsawInThisLevel);
+    current.nextLevelIsUnlocked = memory.ReadValue<uint>((IntPtr)vars.nextLevelIsUnlocked);
+
+    current.jigsawLevelCompleted = new bool[vars.jigsawLevelCompletedAddresses.Length];
+    for(int i = 0; i < current.jigsawLevelCompleted.Length; i++){
+        current.jigsawLevelCompleted[i] = memory.ReadValue<uint>((IntPtr)vars.jigsawLevelCompletedAddresses[i]) == 1;
+    }
+
     current.menuState = memory.ReadValue<uint>((IntPtr)vars.menuState);
     current.menuSelectedIndex = memory.ReadValue<uint>((IntPtr)vars.menuSelectedIndex);
     current.controllerState = memory.ReadValue<uint>((IntPtr)vars.controllerState);
@@ -269,7 +283,15 @@ update {
     current.startPressed = (current.controllerState & vars.startPressed) == 0;
     current.xPressed = (current.controllerState & vars.xPressed) == 0;
     // Debug logging 
-    //print("MenuState read as: " + current.menuState);
+    //print("LC Shown: " + current.levelCompleteShown + " | LC Confirm: " + current.levelCompleteConfirmed + " | Jigsaw: " + current.nextLevelIsUnlocked);
+    // print("0: " + current.jigsawLevelCompleted[0] 
+    //     + " | 1: " + current.jigsawLevelCompleted[1]
+    //     + " | 2: " + current.jigsawLevelCompleted[2]
+    //     + " | 3: " + current.jigsawLevelCompleted[3]
+    //     + " | 4: " + current.jigsawLevelCompleted[4]
+    //     + " | 5: " + current.jigsawLevelCompleted[5]
+    //     + " | 6: " + current.jigsawLevelCompleted[6]
+    //     + " | 7: " + current.jigsawLevelCompleted[7]);
 }
  
 start {
@@ -306,16 +328,16 @@ split {
         vars.splitOnLevelComplete = false;
     }
 
-    if(current.collectedJigsawInThisLevel == 0){
+    if(current.nextLevelIsUnlocked == 0){
         vars.splitOnJigsawLevel = false;
     }
 
     // Check if completed level
    
     if(!vars.splitOnLevelComplete
+        && !vars.splitOnJigsawLevel
         && current.levelCompleteShown == 1 
-        && current.levelCompleteConfirmed == 1
-        && current.collectedJigsawInThisLevel != 1)
+        && current.levelCompleteConfirmed == 1)
     {
         vars.splitOnLevelComplete = true;
         return true;
@@ -323,10 +345,16 @@ split {
 
     // Check if collected jigsaw
     if(!vars.splitOnJigsawLevel
-        && current.collectedJigsawInThisLevel == 1)
+        && old.jigsawLevelCompleted != null)
     {
-        vars.splitOnJigsawLevel = true;
-        return true;
+        for(int i = 0; i < current.jigsawLevelCompleted.Length; i++){
+            if(current.jigsawLevelCompleted[i] 
+                && current.jigsawLevelCompleted[i] != old.jigsawLevelCompleted[i])
+            {
+                vars.splitOnJigsawLevel = true;
+                return true;
+            }
+        }
     }
  
     return false;
